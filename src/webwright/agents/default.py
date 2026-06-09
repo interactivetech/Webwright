@@ -90,6 +90,9 @@ class DefaultAgent:
         self.n_calls = 0
         self.n_format_errors = 0
 
+    def _emit_progress(self, message: str) -> None:
+        print(message, flush=True)
+
     def _debug_dir(self) -> Path | None:
         if self.config.output_path is None:
             return None
@@ -392,6 +395,9 @@ class DefaultAgent:
                     extra={"exit_status": "LimitsExceeded", "submission": ""},
                 )
             )
+        self._emit_progress(
+            f"[webwright] Step {self.n_calls + 1}/{self.config.step_limit}: querying model"
+        )
         message = self.model.query(self.messages)
         self.n_calls += 1
         self.add_messages(message)
@@ -400,6 +406,7 @@ class DefaultAgent:
     def execute_actions(self, message: dict[str, Any]) -> list[dict[str, Any]]:
         extra = message.get("extra", {})
         if extra.get("done"):
+            self._emit_progress(f"[webwright] Step {self.n_calls}: task complete")
             gate_error = self._self_reflection_gate_error()
             if gate_error is not None:
                 extra["done"] = False
@@ -422,7 +429,15 @@ class DefaultAgent:
                     },
                 )
             )
-        outputs = [self.env.execute(action) for action in extra.get("actions", [])]
+        actions = extra.get("actions", [])
+        outputs: list[dict[str, Any]] = []
+        for index, action in enumerate(actions, start=1):
+            command_text = _action_text(action)
+            suffix = f" ({command_text[:120]})" if command_text else ""
+            self._emit_progress(
+                f"[webwright] Step {self.n_calls}: executing action {index}/{len(actions)}{suffix}"
+            )
+            outputs.append(self.env.execute(action))
         self._write_debug_step_artifact(step_index=self.n_calls, assistant_message=message, outputs=outputs)
         observation_messages = self.model.format_observation_messages(message, outputs, self.get_template_vars())
         if self.config.attach_instance_template_after_observation:

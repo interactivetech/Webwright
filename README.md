@@ -171,28 +171,197 @@ python assets/task_showcase/app.py \
 
 - Python 3.10+
 - Chromium installed through Playwright
-- An API key for your chosen backend (OpenAI, Anthropic, or OpenRouter)
+- Credentials for your chosen backend, unless you are pointing at a local
+  OpenAI-compatible endpoint that permits empty auth
 
 ### Install
 
+From a fresh macOS checkout, this sequence is the safest path:
+
+1. Clone the repo and enter it.
+
 ```bash
-pip install -e .
-playwright install chromium
+git clone <repo-url> Webwright
+cd Webwright
+```
+
+2. Make sure you are using Python 3.10+.
+
+```bash
+python --version
+```
+
+3. Upgrade packaging tools in that Python environment. This avoids older `pip`
+failing on the repo's `pyproject.toml`.
+
+```bash
+python -m pip install --upgrade pip setuptools wheel
+```
+
+4. Install Webwright and its dependencies.
+
+```bash
+python -m pip install -e .
+```
+
+If editable install ever fails in your environment, use:
+
+```bash
+python -m pip install .
+```
+
+5. Install Playwright Chromium.
+
+```bash
+python -m playwright install chromium
+```
+
+6. Export `PYTHONPATH` when running directly from the repo checkout.
+
+```bash
+export PYTHONPATH=src
+```
+
+7. Smoke-test the CLI.
+
+```bash
+python -m webwright.run.cli --help
+python -m webwright.run.cli main --help
+```
+
+8. Run a minimal example.
+
+```bash
+python -m webwright.run.cli main \
+    -c base.yaml \
+    -c local_browser.yaml \
+    -c model_qwen_vllm.yaml \
+    -t "Open example.com and report the page title." \
+    --start-url "https://example.com" \
+    --task-id demo_qwen_local \
+    -o outputs/default
 ```
 
 ### Run
 
-Export credentials for the configured backend (for example, `OPENAI_API_KEY`
-with `model_openai.yaml` or `ANTHROPIC_API_KEY` with `model_claude.yaml`). The
-`image_qa` and `self_reflection` tools use the same configured model by default,
-so an Anthropic run does not require an OpenAI key. Then:
+Export credentials for the configured backend when needed (for example,
+`OPENAI_API_KEY` with `model_openai.yaml` or `ANTHROPIC_API_KEY` with
+`model_claude.yaml`). The `image_qa` and `self_reflection` tools use the same
+configured model by default, so an Anthropic run does not require an OpenAI
+key. Local vLLM / other OpenAI-compatible `/v1/responses` endpoints can instead
+be configured directly in YAML and may omit `OPENAI_API_KEY` entirely when the
+endpoint permits empty auth. Then:
 
 ```bash
-python -m webwright.run.cli \
+python -m webwright.run.cli main \
     -c base.yaml -c model_openai.yaml \
     -t "Search for flights from SEA to JFK on 2026-08-15 to 2026-08-20" \
     --start-url https://www.google.com/flights \
     --task-id demo_openai \
+    -o outputs/default
+```
+
+Local vLLM Qwen example:
+
+```bash
+python -m webwright.run.cli main \
+    -c base.yaml -c local_browser.yaml -c model_qwen_vllm.yaml \
+    -t "Open example.com and report the page title" \
+    --start-url "https://example.com" \
+    --task-id demo_qwen_local \
+    -o outputs/default
+```
+
+`model_qwen_vllm.yaml` defaults to `http://192.168.1.171:8000/v1/responses`
+with a very high `max_output_tokens` ceiling because Qwen often spends hundreds
+or thousands of output tokens on reasoning before emitting the final answer.
+
+If you are reinstalling later on a Mac and see one of these failures:
+
+- `No module named typer`: run the install steps above again in the active Python.
+- `editable mode currently requires a setuptools-based build`: upgrade `pip setuptools wheel` first.
+- `No module named playwright`: reinstall the package, then run `python -m playwright install chromium`.
+- `No such option: -c`: use `python -m webwright.run.cli main ...` rather than calling the Typer app without the `main` subcommand.
+- `zsh: no matches found` for a URL: wrap the URL in quotes.
+- `Responses API payload incomplete: max_output_tokens`: raise `model.max_output_tokens` in the active model YAML.
+
+### Tested Task Commands
+
+These are working task commands used to validate the local Qwen/vLLM setup on
+macOS.
+
+HPE stock price:
+
+```bash
+export PYTHONPATH=src
+
+python -m webwright.run.cli main \
+    -c base.yaml \
+    -c local_browser.yaml \
+    -c model_qwen_vllm.yaml \
+    -t "Search the web and return the current price of HPE stock." \
+    --start-url "https://www.google.com/finance/quote/HPE:NYSE" \
+    --task-id hpe_price_demo \
+    -o outputs/default
+```
+
+Rockville car washes with JSON count:
+
+```bash
+export PYTHONPATH=src
+
+python -m webwright.run.cli main \
+    -c base.yaml \
+    -c local_browser.yaml \
+    -c model_qwen_vllm.yaml \
+    -t "Search the web for local car washes in the Rockville, Maryland area. Count the number and return exactly valid JSON with keys count and businesses." \
+    --start-url "https://www.google.com/search?q=car+washes+in+Rockville+Maryland" \
+    --task-id rockville_car_washes_json \
+    -o outputs/default
+```
+
+Rockville car washes with address, phone, and hours:
+
+```bash
+export PYTHONPATH=src
+
+python -m webwright.run.cli main \
+    -c base.yaml \
+    -c local_browser.yaml \
+    -c model_qwen_vllm.yaml \
+    -t "Search the web for local car washes in the Rockville, Maryland area. Count the number and return exactly valid JSON with keys count and businesses. For each business, include name, address, phone_number, and hours_of_operation if available." \
+    --start-url "https://www.google.com/search?q=car+washes+in+Rockville+Maryland" \
+    --task-id rockville_car_washes_details_json \
+    -o outputs/default
+```
+
+Rockville online multiple sclerosis support groups:
+
+```bash
+export PYTHONPATH=src
+
+python -m webwright.run.cli main \
+    -c base.yaml \
+    -c local_browser.yaml \
+    -c model_qwen_vllm.yaml \
+    -t "Search the web for online support multiple sclerosis groups in the Rockville, Maryland area. Return exactly valid JSON with keys count and groups. For each group, include name, website, meeting_format, location, contact_info, and notes if available." \
+    --start-url "https://www.google.com/search?q=online+multiple+sclerosis+support+groups+Rockville+Maryland" \
+    --task-id rockville_ms_support_groups_json \
+    -o outputs/default
+```
+
+Nvidia RTX 6000 Max-Q GPU pricing:
+
+```bash
+export PYTHONPATH=src
+
+python -m webwright.run.cli main \
+    -c base.yaml \
+    -c local_browser.yaml \
+    -c model_qwen_vllm.yaml \
+    -t "Search the web for the latest prices for an Nvidia RTX 6000 Max-Q GPU. Return exactly valid JSON with keys query, prices, and sources. For each result include seller, price, currency, product_name, and url if available." \
+    --start-url "https://www.google.com/search?q=Nvidia+RTX+6000+Max-Q+GPU+price" \
+    --task-id nvidia_rtx6000_maxq_prices \
     -o outputs/default
 ```
 
@@ -205,6 +374,38 @@ python -m webwright.run.cli \
 | `--start-url` | Initial page. |
 | `--task-id` | Output subfolder name. |
 | `-o` | Output directory. |
+
+---
+
+### Responses Probe
+
+For local OpenAI-compatible backends that expose reasoning alongside the final
+assistant message, use the probe helper to inspect the raw `/v1/responses`
+payload and the extracted final text:
+
+```bash
+PYTHONPATH=src python -m webwright.run.probe_responses_api \
+    --endpoint http://192.168.1.171:8000/v1/responses \
+    --model Qwen/Qwen3.6-35B-A3B-FP8 \
+    --prompt "Reply with exactly: pong" \
+    --max-output-tokens 256
+```
+
+The probe reports:
+
+- `status` / `incomplete_details` from the Responses API
+- `extracted_text` after ignoring `type=reasoning` blocks
+- the full raw payload for debugging token-budget issues
+
+If the payload is incomplete with `max_output_tokens`, raise the token budget
+before treating it as a parsing problem.
+
+### Doctor Notes
+
+`webwright doctor` still checks for `OPENAI_API_KEY` when you are targeting
+OpenAI itself. For local OpenAI-compatible endpoints, set `OPENAI_BASE_URL` or
+`OPENAI_ENDPOINT` before running doctor if you want that check to pass without
+an API key.
 
 ---
 

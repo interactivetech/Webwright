@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from webwright.models.base import (
     BaseModel,
@@ -13,13 +13,28 @@ from webwright.models.base import (
     image_part_from_path,
     text_part,
 )
+from webwright.models.openai_responses_utils import (
+    ensure_response_completed as _ensure_response_completed,
+)
+from webwright.models.openai_responses_utils import (
+    extract_response_text as _extract_response_text,
+)
 
 __all__ = [
     "OpenAIModel",
     "OpenAIModelConfig",
+    "_ensure_response_completed",
     "_extract_response_text",
     "text_part",
 ]
+
+
+def _endpoint_host(endpoint: str) -> str:
+    return (urlparse(endpoint).hostname or "").lower()
+
+
+def _is_openai_endpoint(endpoint: str) -> bool:
+    return _endpoint_host(endpoint) == "api.openai.com"
 
 
 def _serialize_response_content_part(part: dict[str, Any], *, role: str) -> dict[str, Any]:
@@ -61,27 +76,6 @@ def _serialize_response_input(messages: list[dict[str, Any]]) -> list[dict[str, 
     return serialized
 
 
-def _extract_response_text(payload: dict[str, Any]) -> str:
-    output_text = payload.get("output_text")
-    if isinstance(output_text, str) and output_text:
-        return output_text
-
-    texts: list[str] = []
-    for item in payload.get("output") or []:
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") != "message":
-            continue
-        for content in item.get("content") or []:
-            if not isinstance(content, dict):
-                continue
-            if isinstance(content.get("text"), str):
-                texts.append(content["text"])
-            elif isinstance(content.get("output_text"), str):
-                texts.append(content["output_text"])
-    return "\n".join(texts)
-
-
 def _usage_metrics_from_response_payload(payload: dict[str, Any]) -> dict[str, int]:
     usage = payload.get("usage")
     if not isinstance(usage, dict):
@@ -116,11 +110,16 @@ class OpenAIModel(BaseModel):
     _MAX_TRANSIENT_RETRIES = 5
     _DEFAULT_CONFIG_CLASS = OpenAIModelConfig
 
+    def _requires_api_key(self) -> bool:
+        return _is_openai_endpoint(self.config.openai_endpoint)
+
     def _request_headers(self) -> dict[str, str]:
-        return {
+        headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.config.openai_api_key}",
         }
+        if self.config.openai_api_key:
+            headers["Authorization"] = f"Bearer {self.config.openai_api_key}"
+        return headers
 
     def _post_url(self) -> str:
         return self.config.openai_endpoint
@@ -151,6 +150,7 @@ class OpenAIModel(BaseModel):
         return payload.get("input") or []
 
     def _extract_text(self, payload: dict[str, Any]) -> str:
+        _ensure_response_completed(payload)
         return _extract_response_text(payload)
 
     def _usage_metrics_from_payload(self, payload: dict[str, Any]) -> dict[str, int]:

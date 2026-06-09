@@ -5,6 +5,7 @@ import subprocess
 import sys
 from importlib.util import find_spec
 from pathlib import Path
+from urllib.parse import urlparse
 from rich.console import Console
 from rich.table import Table
 
@@ -75,12 +76,31 @@ def check_screenshot():
         )
 
 
+def _local_openai_compatible_endpoint_from_env() -> str:
+    for var_name in ("OPENAI_BASE_URL", "OPENAI_ENDPOINT"):
+        value = str(os.getenv(var_name, "") or "").strip()
+        if not value:
+            continue
+        hostname = (urlparse(value).hostname or "").lower()
+        if hostname and hostname != "api.openai.com":
+            return value
+    return ""
+
+
 def check_openai_key():
     if os.getenv("OPENAI_API_KEY"):
         return True, "OPENAI_API_KEY found"
+    local_endpoint = _local_openai_compatible_endpoint_from_env()
+    if local_endpoint:
+        return True, (
+            "OPENAI_API_KEY missing, but local OpenAI-compatible endpoint configured: "
+            f"{local_endpoint}"
+        )
 
     return False, (
-        "OPENAI_API_KEY missing\nFix: set the OPENAI_API_KEY environment variable"
+        "OPENAI_API_KEY missing\n"
+        "Fix: set the OPENAI_API_KEY environment variable, or configure OPENAI_BASE_URL / "
+        "OPENAI_ENDPOINT for a local OpenAI-compatible endpoint that permits empty auth"
     )
 
 

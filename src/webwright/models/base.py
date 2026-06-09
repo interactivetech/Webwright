@@ -254,13 +254,16 @@ class BaseModel:
         if self._API_KEY_FIELD:
             if not getattr(self.config, self._API_KEY_FIELD, ""):
                 setattr(self.config, self._API_KEY_FIELD, os.environ.get(self._ENV_VAR, ""))
-            if not getattr(self.config, self._API_KEY_FIELD, ""):
+            if self._requires_api_key() and not getattr(self.config, self._API_KEY_FIELD, ""):
                 raise RuntimeError(f"Missing {self._ENV_VAR}.")
 
     # ---- subclass extension points ------------------------------------------------
 
     def _request_headers(self) -> dict[str, str]:
         raise NotImplementedError
+
+    def _requires_api_key(self) -> bool:
+        return bool(self._API_KEY_FIELD)
 
     def _post_url(self) -> str:
         raise NotImplementedError

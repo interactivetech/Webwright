@@ -1,0 +1,15 @@
+# Model modifier — local vLLM Qwen via the OpenAI-compatible Responses API.
+#
+# Stack on top of base.yaml or local_browser.yaml:
+#   python -m webwright.run.cli -c base.yaml -c model_qwen_vllm.yaml ...
+#   python -m webwright.run.cli -c base.yaml -c local_browser.yaml -c model_qwen_vllm.yaml ...
+#
+# Local vLLM endpoints typically do not require auth. Webwright will still send
+# OPENAI_API_KEY if it is set, but leaves Authorization unset when this endpoint
+# points at a non-OpenAI host and no key is configured.
+
+model:
+  model_class: openai
+  model_name: Qwen/Qwen3.6-35B-A3B-FP8
+  openai_endpoint: http://192.168.1.171:8000/v1/responses
+  max_output_tokens: 32768
